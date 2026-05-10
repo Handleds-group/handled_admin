@@ -1472,10 +1472,10 @@
           <div class="card-header">
             <h2><i class="fas fa-users"></i> All Users</h2>
             <div class="btn-group">
-              <input type="text" id="userSearch" class="form-control" placeholder="Search by name or email..." style="width:250px;">
-              <button class="btn btn-outline btn-sm" onclick="exportUsers()"><i class="fas fa-file-alt"></i> Export TXT</button>
-<button class="btn btn-outline btn-sm" onclick="exportUsersCSV()"><i class="fas fa-file-csv"></i> CSV</button>
-            </div>
+  <input type="text" id="userSearch" class="form-control" placeholder="Search..." style="width:200px;">
+  <button class="btn btn-outline btn-sm" onclick="exportUsers()"><i class="fas fa-file-alt"></i> TXT</button>
+  <button class="btn btn-outline btn-sm" onclick="exportUsersCSV()"><i class="fas fa-file-csv"></i> CSV</button>
+</div>
           </div>
           <div class="card-body no-padding">
             <div class="table-container">
@@ -1618,100 +1618,154 @@
       }
     }
 
-   async function exportUsers() {
-  try {
-    showToast('Fetching users for export...', 'info');
-    
-    // Fetch all users directly from API
-    const users = await apiFetch('/admin/users?limit=1000');
-    
-    if (!users || users.length === 0) {
-      showToast('No users to export', 'error');
-      return;
-    }
-
-    // Build text content with all user details
-    let content = '';
-    content += '═══════════════════════════════════════════\n';
-    content += '  HANDLED ADMIN - USER DATA EXPORT\n';
-    content += '  Date: ' + new Date().toLocaleString() + '\n';
-    content += '  Total Users: ' + users.length + '\n';
-    content += '═══════════════════════════════════════════\n\n';
-
-    users.forEach((user, index) => {
-      content += '┌─────────────────────────────────────────┐\n';
-      content += '│ USER #' + user.id + '\n';
-      content += '├─────────────────────────────────────────┤\n';
-      content += '│ Username:  ' + (user.username || 'N/A') + '\n';
-      content += '│ Email:     ' + (user.email || 'N/A') + '\n';
-      content += '│ Premium:   ' + (user.is_premium ? 'Yes' : 'No') + '\n';
-      content += '│ Created:   ' + formatDate(user.created_at) + '\n';
-      content += '│ Last Seen: ' + formatDate(user.last_seen) + '\n';
-      content += '└─────────────────────────────────────────┘\n\n';
-    });
-
-    content += '═══════════════════════════════════════════\n';
-    content += '  END OF REPORT\n';
-    content += '═══════════════════════════════════════════\n';
-
-    // Download as text file
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'handled_users_' + new Date().toISOString().split('T')[0] + '.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showToast(users.length + ' users exported successfully', 'success');
-
-  } catch (error) {
-    showToast('Export failed: ' + error.message, 'error');
+function exportUsers() {
+  // Get data directly from the table already displayed
+  const tbody = document.getElementById('usersTable');
+  if (!tbody) {
+    showToast('No data to export', 'error');
+    return;
   }
+  
+  const rows = tbody.querySelectorAll('tr');
+  
+  // Check if table is empty or still loading
+  if (rows.length === 0 || rows[0].querySelector('.loading-spinner') || rows[0].querySelector('.empty-state')) {
+    showToast('No users to export', 'error');
+    return;
+  }
+
+  let content = '';
+  content += '═══════════════════════════════════════════\n';
+  content += '  HANDLED ADMIN - USER DATA EXPORT\n';
+  content += '  Date: ' + new Date().toLocaleString() + '\n';
+  content += '  Total Users: ' + rows.length + '\n';
+  content += '═══════════════════════════════════════════\n\n';
+
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 6) return;
+
+    // Extract data from each cell (removing HTML badges and tags)
+    const id = cells[0].innerText.replace('#', '').trim();
+    const username = cells[1].innerText.trim();
+    const email = cells[2].innerText.trim();
+    const premium = cells[3].innerText.trim();
+    const created = cells[4].innerText.trim();
+    const lastSeen = cells[5].innerText.trim();
+
+    content += '┌─────────────────────────────────────────┐\n';
+    content += '│ USER #' + id + '\n';
+    content += '├─────────────────────────────────────────┤\n';
+    content += '│ Username:  ' + username + '\n';
+    content += '│ Email:     ' + email + '\n';
+    content += '│ Premium:   ' + premium + '\n';
+    content += '│ Created:   ' + created + '\n';
+    content += '│ Last Seen: ' + lastSeen + '\n';
+    content += '└─────────────────────────────────────────┘\n\n';
+  });
+
+  content += '═══════════════════════════════════════════\n';
+  content += '  END OF REPORT\n';
+  content += '═══════════════════════════════════════════\n';
+
+  // Download as text file
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'handled_users_' + new Date().toISOString().split('T')[0] + '.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(rows.length + ' users exported successfully', 'success');
 }
 
-async function exportUsersCSV() {
-  try {
-    showToast('Fetching users for export...', 'info');
-    
-    const users = await apiFetch('/admin/users?limit=1000');
-    
-    if (!users || users.length === 0) {
-      showToast('No users to export', 'error');
-      return;
-    }
-
-    // CSV header
-    let csv = 'ID,Username,Email,Premium,Created,Last Seen\n';
-    
-    users.forEach(user => {
-      csv += [
-        user.id,
-        '"' + (user.username || 'N/A').replace(/"/g, '""') + '"',
-        '"' + (user.email || 'N/A').replace(/"/g, '""') + '"',
-        user.is_premium ? 'Yes' : 'No',
-        '"' + formatDate(user.created_at) + '"',
-        '"' + formatDate(user.last_seen) + '"'
-      ].join(',') + '\n';
-    });
-
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'handled_users_' + new Date().toISOString().split('T')[0] + '.csv';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-
-    showToast(users.length + ' users exported to CSV', 'success');
-
-  } catch (error) {
-    showToast('Export failed', 'error');
+// CSV version also using table data
+function exportUsersCSV() {
+  const tbody = document.getElementById('usersTable');
+  if (!tbody) {
+    showToast('No data to export', 'error');
+    return;
   }
+  
+  const rows = tbody.querySelectorAll('tr');
+  
+  if (rows.length === 0 || rows[0].querySelector('.loading-spinner') || rows[0].querySelector('.empty-state')) {
+    showToast('No users to export', 'error');
+    return;
+  }
+
+  let csv = 'ID,Username,Email,Premium,Created,Last Seen\n';
+  
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 6) return;
+
+    const id = cells[0].innerText.replace('#', '').trim();
+    const username = cells[1].innerText.trim();
+    const email = cells[2].innerText.trim();
+    const premium = cells[3].innerText.trim();
+    const created = cells[4].innerText.trim();
+    const lastSeen = cells[5].innerText.trim();
+
+    csv += id + ',"' + username + '","' + email + '","' + premium + '","' + created + '","' + lastSeen + '"\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'handled_users_' + new Date().toISOString().split('T')[0] + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(rows.length + ' users exported to CSV', 'success');
+}
+function exportUsersCSV() {
+  const tbody = document.getElementById('usersTable');
+  if (!tbody) {
+    showToast('No data to export', 'error');
+    return;
+  }
+  
+  const rows = tbody.querySelectorAll('tr');
+  
+  if (rows.length === 0 || rows[0].querySelector('.loading-spinner') || rows[0].querySelector('.empty-state')) {
+    showToast('No users to export', 'error');
+    return;
+  }
+
+  let csv = 'ID,Username,Email,Premium,Created,Last Seen\n';
+  
+  rows.forEach(row => {
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 6) return;
+
+    const id = cells[0].innerText.replace('#', '').trim();
+    const username = cells[1].innerText.trim();
+    const email = cells[2].innerText.trim();
+    const premium = cells[3].innerText.trim();
+    const created = cells[4].innerText.trim();
+    const lastSeen = cells[5].innerText.trim();
+
+    csv += id + ',"' + username + '","' + email + '","' + premium + '","' + created + '","' + lastSeen + '"\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'handled_users_' + new Date().toISOString().split('T')[0] + '.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  showToast(rows.length + ' users exported to CSV', 'success');
 }
     // PAYMENTS
     async function renderPayments() {
