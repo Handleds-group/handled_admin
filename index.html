@@ -1121,10 +1121,10 @@
           <button class="icon-btn" id="refreshBtn" title="Refresh Data">
             <i class="fas fa-sync-alt"></i>
           </button>
-          <button class="icon-btn" id="notifBtn" title="Notifications">
-            <i class="fas fa-bell"></i>
-            <span class="dot"></span>
-          </button>
+         <button class="icon-btn" id="notifBtn" title="Send Broadcast Notification" onclick="navigateTo('notifications')">
+  <i class="fas fa-bell"></i>
+  <span class="dot"></span>
+</button>
         </div>
       </div>
     </header>
@@ -1891,30 +1891,85 @@ function exportUsersCSV() {
 
     // NOTIFICATIONS
     async function renderNotifications() {
-      document.getElementById('pageTitle').textContent = 'Notifications';
-      document.getElementById('appContent').innerHTML = `
-        <div class="card">
-          <div class="card-header">
-            <h2><i class="fas fa-bell"></i> Send Notification</h2>
-          </div>
-          <div class="card-body">
-            <div class="form-group">
-              <label>User ID</label>
-              <input type="number" id="notifUserId" class="form-control" placeholder="Enter user ID">
-            </div>
-            <div class="form-group">
-              <label>Title</label>
-              <input type="text" id="notifTitleBulk" class="form-control" placeholder="Notification title">
-            </div>
-            <div class="form-group">
-              <label>Message</label>
-              <textarea id="notifMessageBulk" class="form-control" placeholder="Notification message..." rows="4"></textarea>
-            </div>
-            <button class="btn btn-primary" onclick="sendBulkNotification()"><i class="fas fa-paper-plane"></i> Send Notification</button>
-          </div>
+  document.getElementById('pageTitle').textContent = 'Broadcast Notification';
+  document.getElementById('appContent').innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <h2><i class="fas fa-bell"></i> Send Notification to All Users</h2>
+      </div>
+      <div class="card-body">
+        <div class="form-group">
+          <label>Title</label>
+          <input type="text" id="notifTitleBulk" class="form-control" placeholder="Notification title">
         </div>
-      `;
+        <div class="form-group">
+          <label>Message</label>
+          <textarea id="notifMsgBulk" class="form-control" placeholder="Notification message..." rows="4"></textarea>
+        </div>
+        <div class="form-group">
+          <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+            <input type="checkbox" id="sendEmailCheck" checked style="width:18px;height:18px;cursor:pointer;">
+            <span>Send also as email to all users</span>
+          </label>
+        </div>
+        <button class="btn btn-primary" id="sendBulkNotifBtn">
+          <i class="fas fa-paper-plane"></i> Send to All Users
+        </button>
+        <div id="broadcastResult" style="margin-top:1rem;"></div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('sendBulkNotifBtn').addEventListener('click', async () => {
+    const title = document.getElementById('notifTitleBulk').value.trim();
+    const message = document.getElementById('notifMsgBulk').value.trim();
+    const sendEmail = document.getElementById('sendEmailCheck').checked;
+    const resultDiv = document.getElementById('broadcastResult');
+
+    if (!title || !message) {
+      showToast('Title and message are required', 'error');
+      return;
     }
+
+    const btn = document.getElementById('sendBulkNotifBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="loading-spinner"></div> Sending...';
+
+    try {
+      const response = await apiFetch('/admin/notifications/broadcast', {
+        method: 'POST',
+        body: JSON.stringify({ title, message, send_email: sendEmail })
+      });
+
+      resultDiv.innerHTML = `
+        <div class="alert alert-success">
+          <i class="fas fa-check-circle"></i>
+          <div>
+            <strong>Broadcast Sent!</strong>
+            <p style="margin:0;font-size:0.85rem;">
+              Sent to ${response.recipients_count} users.
+              ${response.failed_count > 0 ? ' Failed: ' + response.failed_count : ''}
+            </p>
+          </div>
+        </div>`;
+
+      document.getElementById('notifTitleBulk').value = '';
+      document.getElementById('notifMsgBulk').value = '';
+      showToast('Notification broadcasted to all users', 'success');
+
+    } catch (error) {
+      resultDiv.innerHTML = `
+        <div class="alert alert-error">
+          <i class="fas fa-exclamation-circle"></i>
+          <div><strong>Failed</strong><p style="margin:0;font-size:0.85rem;">${error.message}</p></div>
+        </div>`;
+      showToast('Failed to send broadcast', 'error');
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send to All Users';
+  });
+}
 
     async function sendBulkNotification() {
       const userId = document.getElementById('notifUserId').value;
