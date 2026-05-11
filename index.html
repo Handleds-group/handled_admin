@@ -1084,6 +1084,9 @@
       </a>
 
       <div class="nav-section">System</div>
+      <a class="nav-item" data-page="security">
+        <i class="fas fa-shield-alt"></i> <span>Security</span>
+      </a>
       <a class="nav-item" data-page="settings">
         <i class="fas fa-cog"></i> <span>Settings</span>
       </a>
@@ -1175,7 +1178,7 @@
       }, 3500);
     }
 
-    async function apiFetch(path, options = {}) {
+        async function apiFetch(path, options = {}) {
       const headers = {
         'Content-Type': 'application/json',
         ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
@@ -1194,6 +1197,10 @@
           authToken = '';
           showLogin();
           throw new Error('Session expired');
+        }
+        if (response.status === 403) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Access denied');
         }
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({}));
@@ -1330,7 +1337,10 @@
           body: JSON.stringify({ password: password })
         });
 
-        if (!response.ok) throw new Error('Invalid password');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(errorData.detail || 'Invalid password');
+}
 
         const data = await response.json();
         authToken = data.access_token;
@@ -1562,7 +1572,7 @@
         `;
 
         openModal(`User Profile #${userId}`, bodyHTML, `
-          <button class="btn btn-danger" onclick="deleteUser(${userId});closeModal();"><i class="fas fa-trash"></i> Delete User</button>
+          <button class="btn btn-danger" onclick="closeModal();setTimeout(()=>deleteUser(${userId}),200);"><i class="fas fa-trash"></i> Delete User</button>
           <button class="btn btn-primary" onclick="closeModal()">Close</button>
         `);
       } catch (error) {
@@ -1571,16 +1581,28 @@
     }
 
     async function deleteUser(userId) {
-      if (!confirm(`Are you sure you want to delete user #${userId}? This action cannot be undone.`)) return;
-      try {
-        await apiFetch(`/admin/users/${userId}`, { method: 'DELETE' });
-        showToast(`User #${userId} deleted successfully`, 'success');
-        if (currentPage === 'users') loadUsers();
-        else if (currentPage === 'dashboard') renderDashboard();
-      } catch (error) {
-        showToast('Failed to delete user', 'error');
-      }
-    }
+  if (!confirm(`Delete user #${userId}? This will also send them an email notification.`)) return;
+  
+  // Ask for deletion reason
+  const reason = prompt('Reason for deletion (optional):\nExamples: fake_reports, spam, violation, inactive, user_request');
+  const customMessage = prompt('Custom message to the user (optional):\nLeave blank to use default message.');
+  
+  try {
+    const body = {};
+    if (reason) body.reason = reason;
+    if (customMessage) body.custom_message = customMessage;
+    
+    await apiFetch(`/admin/users/${userId}`, { 
+      method: 'DELETE',
+      body: JSON.stringify(body)
+    });
+    showToast(`User #${userId} deleted and email sent`, 'success');
+    if (currentPage === 'users') loadUsers();
+    else if (currentPage === 'dashboard') renderDashboard();
+  } catch (error) {
+    showToast('Failed to delete user: ' + error.message, 'error');
+  }
+}
 
     function sendNotification(userId) {
       const bodyHTML = `
@@ -2104,7 +2126,130 @@ function exportUsersCSV() {
         showToast('Failed to submit withdrawal', 'error');
       }
     }
+    // SECURITY
+    async function renderSecurity() {
+      document.getElementById('pageTitle').textContent = 'Security Management';
+      document.getElementById('appContent').innerHTML = `
+        <div class="card">
+          <div class="card-header">
+            <h2><i class="fas fa-shield-alt"></i> Blocked IPs</h2>
+            <button class="btn btn-primary btn-sm" id="refreshSecurityBtn"><i class="fas fa-sync-alt"></i> Refresh</button>
+          </div>
+          <div class="card-body no-padding">
+            <div class="table-container">
+              <table>
+                <thead><tr><th>IP Address</th><th>Failed Attempts</th><th>Blocked Until</th><th>Actions</th></tr></thead>
+                <tbody id="blockedIPsTable">${showLoading()}</tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2><i class="fas fa-ban"></i> Block an IP</h2>
+          </div>
+          <div class="card-body">
+            <div class="form-group">
+              <label>IP Address to Block</label>
+              <input type="text" id="blockIPInput" class="form-control" placeholder="e.g. 192.168.1.1">
+            </div>
+            <button class="btn btn-danger" id="blockIPBtn"><i class="fas fa-ban"></i> Block IP (1 hour)</button>
+            <div id="blockIPResult" style="margin-top:0.75rem;"></div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-header">
+            <h2><i class="fas fa-tachometer-alt"></i> Rate Limit Check</h2>
+          </div>
+          <div class="card-body">
+            <button class="btn btn-primary" id="checkRateLimitBtn"><i class="fas fa-search"></i> Check My Rate Limit</button>
+            <div id="rateLimitResult" style="margin-top:0.75rem;"></div>
+          </div>
+        </div>
+      `;
 
+      // Load blocked IPs
+      loadBlockedIPs();
+
+      document.getElementById('refreshSecurityBtn').addEventListener('click', loadBlockedIPs);
+
+      document.getElementById('blockIPBtn').addEventListener('click', async () => {
+        const ip = document.getElementById('blockIPInput').value.trim();
+        if (!ip) { showToast('Enter an IP address', 'error'); return; }
+        try {
+          await apiFetch(`/admin/security/block-ip/${encodeURIComponent(ip)}`, { method: 'POST' });
+          showToast(`IP ${ip} blocked`, 'success');
+          document.getElementById('blockIPInput').value = '';
+          loadBlockedIPs();
+        } catch (e) {
+          document.getElementById('blockIPResult').innerHTML = `<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> ${e.message}</div>`;
+        }
+      });
+
+      document.getElementById('checkRateLimitBtn').addEventListener('click', async () => {
+        try {
+          const result = await apiFetch('/admin/security/rate-limit-check', { method: 'POST' });
+          document.getElementById('rateLimitResult').innerHTML = `
+            <div class="alert alert-success">
+              <i class="fas fa-info-circle"></i>
+              <div>
+                <strong>Rate Limit Status</strong>
+                <p style="margin:0;font-size:0.85rem;">IP: ${result.ip}</p>
+                <p style="margin:0;font-size:0.85rem;">Allowed: ${result.is_allowed ? 'Yes ✓' : 'No ✗'}</p>
+                <p style="margin:0;font-size:0.85rem;">Remaining Requests: ${result.remaining_requests}</p>
+              </div>
+            </div>`;
+        } catch (e) {
+          document.getElementById('rateLimitResult').innerHTML = `<div class="alert alert-error">${e.message}</div>`;
+        }
+      });
+    }
+
+    async function loadBlockedIPs() {
+  try {
+    const stats = await apiFetch('/admin/security/blocked-ips', { skipLoader: true });
+    const tbody = document.getElementById('blockedIPsTable');
+    
+    const blockedIPs = stats.blocked_ips || {};
+    const entries = Object.entries(blockedIPs);
+    
+    if (entries.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4">${showEmpty('No blocked IPs')}</td></tr>`;
+    } else {
+      tbody.innerHTML = entries.map(([ip, data]) => {
+        const blockedUntil = data.blocked_until 
+          ? formatDate(new Date(data.blocked_until * 1000)) 
+          : 'Permanent';
+        const attempts = data.failed_attempts || 0;
+        
+        return `
+        <tr>
+          <td><strong>${ip}</strong></td>
+          <td><span class="badge ${attempts >= 5 ? 'badge-danger' : 'badge-warning'}">${attempts} attempts</span></td>
+          <td>${blockedUntil}</td>
+          <td>
+            <button class="btn btn-success btn-sm unblockIPBtn" data-ip="${ip}"><i class="fas fa-unlock"></i> Unblock</button>
+          </td>
+        </tr>`;
+      }).join('');
+      
+      document.querySelectorAll('.unblockIPBtn').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          if (!confirm(`Unblock IP ${btn.dataset.ip}?`)) return;
+          try {
+            await apiFetch(`/admin/security/unblock-ip/${encodeURIComponent(btn.dataset.ip)}`, { method: 'POST' });
+            showToast(`IP ${btn.dataset.ip} unblocked`, 'success');
+            loadBlockedIPs();
+          } catch (e) {
+            showToast('Failed to unblock', 'error');
+          }
+        });
+      });
+    }
+  } catch (e) {
+    document.getElementById('blockedIPsTable').innerHTML = '<tr><td colspan="4">Failed to load blocked IPs</td></tr>';
+  }
+}
     // SETTINGS
     async function renderSettings() {
       document.getElementById('pageTitle').textContent = 'Settings';
@@ -2134,16 +2279,17 @@ function exportUsersCSV() {
         if (item.dataset.page === page) item.classList.add('active');
       });
 
-      const pageRenderers = {
-        dashboard: renderDashboard,
-        users: renderUsers,
-        payments: renderPayments,
-        bugs: renderBugs,
-        decisions: renderDecisions,
-        notifications: renderNotifications,
-        wallet: renderWallet,
-        withdrawals: renderWithdrawals,
-        settings: renderSettings
+        const pageRenderers = {
+          dashboard: renderDashboard,
+          users: renderUsers,
+          payments: renderPayments,
+          bugs: renderBugs,
+          decisions: renderDecisions,
+          notifications: renderNotifications,
+          wallet: renderWallet,
+          withdrawals: renderWithdrawals,
+          security: renderSecurity,
+          settings: renderSettings
       };
 
       if (pageRenderers[page]) pageRenderers[page]();
