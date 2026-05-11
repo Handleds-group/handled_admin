@@ -1178,17 +1178,16 @@
       }, 3500);
     }
 
-        async function apiFetch(path, options = {}) {
+           async function apiFetch(path, options = {}) {
       const headers = {
         'Content-Type': 'application/json',
         ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
         ...options.headers
       };
 
-      const config = {
-        headers,
-        ...options
-      };
+      const config = { headers, ...options };
+      const skipLoader = options.skipLoader;
+      delete config.skipLoader;
 
       try {
         const response = await fetch(`${API_BASE}${path}`, config);
@@ -1214,7 +1213,6 @@
         throw error;
       }
     }
-
     function formatDate(dateString) {
       if (!dateString) return 'N/A';
       return new Date(dateString).toLocaleDateString('en-US', {
@@ -1317,43 +1315,139 @@
   });
 }
 
-    async function handleLogin() {
+        async function handleLogin() {
       const password = document.getElementById('loginPassword').value;
       const errorDiv = document.getElementById('loginError');
       const btn = document.getElementById('loginSubmit');
+      const passwordInput = document.getElementById('loginPassword');
+
+      // Clear previous errors
+      errorDiv.innerHTML = '';
 
       if (!password) {
-        errorDiv.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-triangle"></i> Password is required</div>';
+        errorDiv.innerHTML = `
+          <div class="alert alert-error" style="display:flex;align-items:center;gap:0.75rem;">
+            <i class="fas fa-exclamation-circle" style="font-size:1.2rem;"></i>
+            <div>
+              <strong>Password Required</strong>
+              <p style="margin:0;font-size:0.8rem;font-weight:400;">Please enter your admin password to continue.</p>
+            </div>
+          </div>`;
+        passwordInput.focus();
         return;
       }
 
+      // Disable button and show loading
       btn.disabled = true;
       btn.innerHTML = '<div class="loading-spinner"></div> Signing in...';
+      passwordInput.disabled = true;
 
       try {
         const response = await fetch(`${API_BASE}/admin/login`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: password })
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ password: password }),
+          mode: 'cors'
         });
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(errorData.detail || 'Invalid password');
-}
+        const data = await response.json().catch(() => ({}));
 
-        const data = await response.json();
+        // Handle 403 - IP Blocked
+        if (response.status === 403) {
+          errorDiv.innerHTML = `
+            <div class="alert alert-error" style="display:flex;align-items:center;gap:0.75rem;">
+              <i class="fas fa-ban" style="font-size:1.5rem;"></i>
+              <div>
+                <strong>Access Blocked</strong>
+                <p style="margin:0;font-size:0.85rem;font-weight:400;">${data.detail || 'Your IP has been blocked for 15 minutes due to multiple failed login attempts.'}</p>
+              </div>
+            </div>`;
+          passwordInput.value = '';
+          btn.disabled = false;
+          passwordInput.disabled = false;
+          btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Sign In';
+          return;
+        }
+
+        // Handle 401 - Wrong Password
+        if (response.status === 401) {
+          errorDiv.innerHTML = `
+            <div class="alert alert-error" style="display:flex;align-items:center;gap:0.75rem;">
+              <i class="fas fa-lock" style="font-size:1.2rem;"></i>
+              <div>
+                <strong>Wrong Password</strong>
+                <p style="margin:0;font-size:0.85rem;font-weight:400;">${data.detail || 'The password you entered is incorrect.'}</p>
+              </div>
+            </div>`;
+          passwordInput.style.borderColor = 'var(--danger)';
+          passwordInput.style.boxShadow = '0 0 0 3px rgba(239,68,68,0.2)';
+          setTimeout(() => {
+            passwordInput.style.borderColor = 'var(--border)';
+            passwordInput.style.boxShadow = 'none';
+          }, 2000);
+          passwordInput.value = '';
+          passwordInput.focus();
+          btn.disabled = false;
+          passwordInput.disabled = false;
+          btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Sign In';
+          return;
+        }
+
+        // Handle other errors
+        if (!response.ok) {
+          throw new Error(data.detail || `Server error (${response.status})`);
+        }
+
+        // Success
         authToken = data.access_token;
         localStorage.setItem('admin_token', authToken);
-        showToast('Login successful', 'success');
-        location.reload();
+        
+        errorDiv.innerHTML = `
+          <div class="alert alert-success" style="display:flex;align-items:center;gap:0.75rem;">
+            <i class="fas fa-check-circle" style="font-size:1.2rem;"></i>
+            <div>
+              <strong>Login Successful</strong>
+              <p style="margin:0;font-size:0.8rem;font-weight:400;">Redirecting to dashboard...</p>
+            </div>
+          </div>`;
+        
+        setTimeout(() => {
+          location.reload();
+        }, 800);
+
       } catch (error) {
-        errorDiv.innerHTML = '<div class="alert alert-error"><i class="fas fa-exclamation-triangle"></i> Invalid admin password</div>';
+        console.error('Login error:', error);
+        
+        // Network error
+        if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+          errorDiv.innerHTML = `
+            <div class="alert alert-error" style="display:flex;align-items:center;gap:0.75rem;">
+              <i class="fas fa-wifi" style="font-size:1.2rem;"></i>
+              <div>
+                <strong>Connection Error</strong>
+                <p style="margin:0;font-size:0.8rem;font-weight:400;">Please check your internet connection and try again.</p>
+              </div>
+            </div>`;
+        } else {
+          errorDiv.innerHTML = `
+            <div class="alert alert-error" style="display:flex;align-items:center;gap:0.75rem;">
+              <i class="fas fa-exclamation-triangle" style="font-size:1.2rem;"></i>
+              <div>
+                <strong>Error</strong>
+                <p style="margin:0;font-size:0.8rem;font-weight:400;">${error.message || 'Something went wrong. Please try again.'}</p>
+              </div>
+            </div>`;
+        }
+
         btn.disabled = false;
+        passwordInput.disabled = false;
         btn.innerHTML = '<i class="fas fa-right-to-bracket"></i> Sign In';
+        passwordInput.focus();
       }
     }
-
     // ==================== PAGE RENDERERS ====================
 
     // DASHBOARD
@@ -1705,48 +1799,6 @@ function exportUsers() {
 }
 
 // CSV version also using table data
-function exportUsersCSV() {
-  const tbody = document.getElementById('usersTable');
-  if (!tbody) {
-    showToast('No data to export', 'error');
-    return;
-  }
-  
-  const rows = tbody.querySelectorAll('tr');
-  
-  if (rows.length === 0 || rows[0].querySelector('.loading-spinner') || rows[0].querySelector('.empty-state')) {
-    showToast('No users to export', 'error');
-    return;
-  }
-
-  let csv = 'ID,Username,Email,Premium,Created,Last Seen\n';
-  
-  rows.forEach(row => {
-    const cells = row.querySelectorAll('td');
-    if (cells.length < 6) return;
-
-    const id = cells[0].innerText.replace('#', '').trim();
-    const username = cells[1].innerText.trim();
-    const email = cells[2].innerText.trim();
-    const premium = cells[3].innerText.trim();
-    const created = cells[4].innerText.trim();
-    const lastSeen = cells[5].innerText.trim();
-
-    csv += id + ',"' + username + '","' + email + '","' + premium + '","' + created + '","' + lastSeen + '"\n';
-  });
-
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'handled_users_' + new Date().toISOString().split('T')[0] + '.csv';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-
-  showToast(rows.length + ' users exported to CSV', 'success');
-}
 function exportUsersCSV() {
   const tbody = document.getElementById('usersTable');
   if (!tbody) {
@@ -2173,17 +2225,31 @@ function exportUsersCSV() {
 
       document.getElementById('refreshSecurityBtn').addEventListener('click', loadBlockedIPs);
 
-      document.getElementById('blockIPBtn').addEventListener('click', async () => {
+            document.getElementById('blockIPBtn').addEventListener('click', async () => {
         const ip = document.getElementById('blockIPInput').value.trim();
+        const resultDiv = document.getElementById('blockIPResult');
+        const btn = document.getElementById('blockIPBtn');
+        
         if (!ip) { showToast('Enter an IP address', 'error'); return; }
+        
+        // Show spinner
+        btn.disabled = true;
+        btn.innerHTML = '<div class="loading-spinner"></div> Blocking...';
+        resultDiv.innerHTML = '';
+        
         try {
-          await apiFetch(`/admin/security/block-ip/${encodeURIComponent(ip)}`, { method: 'POST' });
-          showToast(`IP ${ip} blocked`, 'success');
+          const res = await apiFetch(`/admin/security/block-ip/${encodeURIComponent(ip)}`, { method: 'POST' });
+          showToast(res.message || `IP ${ip} blocked`, 'success');
           document.getElementById('blockIPInput').value = '';
+          resultDiv.innerHTML = `<div class="alert alert-success"><i class="fas fa-check-circle"></i> ${res.message || 'IP blocked for 1 hour'}</div>`;
           loadBlockedIPs();
         } catch (e) {
-          document.getElementById('blockIPResult').innerHTML = `<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> ${e.message}</div>`;
+          resultDiv.innerHTML = `<div class="alert alert-error"><i class="fas fa-exclamation-circle"></i> ${e.message}</div>`;
         }
+        
+        // Reset button
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-ban"></i> Block IP (1 hour)';
       });
 
       document.getElementById('checkRateLimitBtn').addEventListener('click', async () => {
