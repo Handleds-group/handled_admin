@@ -1642,38 +1642,109 @@
         const bugReports = await apiFetch(`/admin/users/${userId}/bug-reports`);
 
         const bodyHTML = `
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
-            <div>
-              <h4 style="margin-bottom:0.5rem;">User Details</h4>
-              <p><strong>ID:</strong> ${user.id}</p>
-              <p><strong>Username:</strong> ${user.username || 'N/A'}</p>
-              <p><strong>Email:</strong> ${user.email || 'N/A'}</p>
-              <p><strong>Description:</strong> ${user.description || 'N/A'}</p>
-              <p><strong>Premium:</strong> <span class="badge ${user.is_premium ? 'badge-purple' : 'badge-info'}">${user.is_premium ? 'Yes' : 'No'}</span></p>
-              <p><strong>Tokens Used:</strong> ${user.tokens_used || 0}</p>
+          <div style="background:#FFF8F0;padding:2rem;border-radius:12px;">
+            <!-- Profile Header -->
+            <div style="background:linear-gradient(135deg, #7C3AED 0%, #a78bfa 100%);padding:2.5rem;border-radius:12px;margin-bottom:2rem;color:white;text-align:center;">
+              <div style="font-size:3rem;margin-bottom:1rem;"><i class="fas fa-user-circle"></i></div>
+              <h2 style="margin:0.5rem 0;font-size:1.8rem;font-weight:800;">${user.username || 'Anonymous User'}</h2>
+              <p style="margin:0.5rem 0;font-size:0.95rem;opacity:0.9;">#${user.id}</p>
+              <div style="margin-top:1rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;">
+                <span class="badge ${user.is_premium ? 'badge-purple' : 'badge-info'}" style="font-size:0.9rem;padding:0.5rem 1rem;">${user.is_premium ? '👑 PREMIUM' : '⭐ FREE'}</span>
+              </div>
             </div>
-            <div>
-              <h4 style="margin-bottom:0.5rem;">Timestamps</h4>
-              <p><strong>Created:</strong> ${formatDate(user.created_at)}</p>
-              <p><strong>Last Seen:</strong> ${formatDate(user.last_seen)}</p>
-              <h4 style="margin:1rem 0 0.5rem;">Recent Transactions</h4>
-              ${user.last_premium_transactions?.length ? user.last_premium_transactions.map(t => `
-                <p style="font-size:0.8rem;">${t.plan} - ${formatCurrency(t.amount, t.currency)} - <span class="badge badge-success">${t.status}</span></p>
-              `).join('') : '<p>No transactions</p>'}
+
+            <!-- Contact Information -->
+            <div style="background:white;padding:1.75rem;border-radius:10px;margin-bottom:1.5rem;border-left:4px solid #7C3AED;">
+              <h3 style="margin:0 0 1.5rem 0;font-size:1.2rem;color:#1f2937;"><i class="fas fa-envelope"></i> Contact Information</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+                <div>
+                  <p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Email Address</p>
+                  <p style="margin:0;font-size:1rem;color:#1f2937;">${user.email || 'N/A'}</p>
+                </div>
+                <div>
+                  <p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Tokens Used</p>
+                  <p style="margin:0;font-size:1rem;color:#1f2937;"><strong>${user.tokens_used || 0}</strong></p>
+                </div>
+              </div>
+              <div style="margin-top:1.5rem;">
+                <p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Bio/Description</p>
+                <p style="margin:0;font-size:0.95rem;color:#4b5563;line-height:1.6;">${user.description || 'No description provided'}</p>
+              </div>
+            </div>
+
+            <!-- Account Timeline -->
+            <div style="background:white;padding:1.75rem;border-radius:10px;margin-bottom:1.5rem;border-left:4px solid #3b82f6;">
+              <h3 style="margin:0 0 1.5rem 0;font-size:1.2rem;color:#1f2937;"><i class="fas fa-clock"></i> Account Timeline</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;">
+                <div>
+                  <p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Account Created</p>
+                  <p style="margin:0;font-size:1rem;color:#1f2937;">${formatDate(user.created_at)}</p>
+                </div>
+                <div>
+                  <p style="margin:0 0 0.5rem 0;font-size:0.85rem;color:#6b7280;font-weight:600;text-transform:uppercase;">Last Activity</p>
+                  <p style="margin:0;font-size:1rem;color:#1f2937;">${formatDate(user.last_seen)}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Transactions -->
+            <div style="background:white;padding:1.75rem;border-radius:10px;margin-bottom:1.5rem;border-left:4px solid #10b981;">
+              <h3 style="margin:0 0 1.5rem 0;font-size:1.2rem;color:#1f2937;"><i class="fas fa-credit-card"></i> Recent Transactions</h3>
+              ${user.last_premium_transactions?.length ? `
+                <div style="display:grid;gap:1rem;">
+                  ${user.last_premium_transactions.map(t => `
+                    <div style="background:#f9fafb;padding:1.25rem;border-radius:8px;border-left:3px solid #10b981;">
+                      <div style="display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center;">
+                        <div>
+                          <p style="margin:0;font-weight:600;color:#1f2937;font-size:1rem;">${t.plan}</p>
+                          <p style="margin:0.25rem 0 0 0;font-size:0.85rem;color:#6b7280;">${formatDate(t.created_at)}</p>
+                        </div>
+                        <div style="text-align:right;">
+                          <p style="margin:0;font-weight:700;color:#1f2937;font-size:1.1rem;">${formatCurrency(t.amount, t.currency)}</p>
+                          <span class="badge badge-success" style="font-size:0.8rem;">${t.status}</span>
+                        </div>
+                      </div>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : '<p style="color:#6b7280;margin:0;">No transactions yet</p>'}
+            </div>
+
+            <!-- Bug Reports -->
+            <div style="background:white;padding:1.75rem;border-radius:10px;border-left:4px solid #ef4444;">
+              <h3 style="margin:0 0 1.5rem 0;font-size:1.2rem;color:#1f2937;"><i class="fas fa-bug"></i> Bug Reports (${bugReports.length})</h3>
+              ${bugReports.length ? `
+                <div style="display:grid;gap:1rem;">
+                  ${bugReports.map(b => `
+                    <div style="background:#fef2f2;padding:1.25rem;border-radius:8px;border-left:3px solid #ef4444;">
+                      <div style="display:flex;gap:1rem;margin-bottom:0.75rem;">
+                        <div style="flex:1;">
+                          <p style="margin:0;font-weight:600;color:#1f2937;">${b.name || 'Anonymous'}</p>
+                          <p style="margin:0.5rem 0 0 0;color:#4b5563;line-height:1.5;">${b.error_message}</p>
+                        </div>
+                      </div>
+                      <p style="margin:0;font-size:0.8rem;color:#6b7280;"><i class="fas fa-calendar-alt"></i> ${formatDate(b.created_at)}</p>
+                    </div>
+                  `).join('')}
+                </div>
+              ` : '<p style="color:#6b7280;margin:0;">No bug reports</p>'}
             </div>
           </div>
-          <h4 style="margin-top:1rem;">Bug Reports (${bugReports.length})</h4>
-          ${bugReports.length ? bugReports.map(b => `
-            <div style="background:#f9fafb;padding:0.75rem;border-radius:8px;margin-bottom:0.5rem;">
-              <strong>${b.name || 'Anonymous'}:</strong> ${b.error_message}<br>
-              <small>${formatDate(b.created_at)}</small>
-            </div>
-          `).join('') : '<p>No bug reports</p>'}
         `;
 
-        openModal(`User Profile #${userId}`, bodyHTML, `
+        // Modify modal styling for wider view
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalContent = modalOverlay.querySelector('.modal-content');
+        if (modalContent) {
+          modalContent.style.maxWidth = '900px';
+          modalContent.style.width = '90vw';
+          modalContent.style.maxHeight = '90vh';
+          modalContent.style.overflowY = 'auto';
+        }
+
+        openModal(`👤 User Profile`, bodyHTML, `
+          <button class="btn btn-outline" onclick="closeModal()">Close</button>
           <button class="btn btn-danger" onclick="closeModal();setTimeout(()=>deleteUser(${userId}),200);"><i class="fas fa-trash"></i> Delete User</button>
-          <button class="btn btn-primary" onclick="closeModal()">Close</button>
         `);
       } catch (error) {
         showToast('Failed to load user profile', 'error');
@@ -1907,7 +1978,10 @@ function exportUsersCSV() {
 
     async function collateWallet() {
       try {
-        const wallet = await apiFetch('/admin/wallet/collate', { method: 'POST' });
+        const wallet = await apiFetch('/admin/wallet/collate', { 
+          method: 'POST',
+          body: JSON.stringify({})
+        });
         showToast('Wallet collated successfully', 'success');
         renderPayments();
       } catch (error) {
@@ -1958,15 +2032,68 @@ function exportUsersCSV() {
     async function renderDecisions() {
       document.getElementById('pageTitle').textContent = 'AI Decisions';
       document.getElementById('appContent').innerHTML = `
+        <div class="stats-grid" id="decisionsStats">${showLoading()}</div>
         <div class="card">
           <div class="card-header">
             <h2><i class="fas fa-brain"></i> Decision History</h2>
           </div>
-          <div class="card-body">
-            ${showEmpty('Decision management coming soon')}
+          <div class="card-body no-padding">
+            <div class="table-container">
+              <table>
+                <thead><tr><th>ID</th><th>User</th><th>Type</th><th>Status</th><th>Date</th></tr></thead>
+                <tbody id="decisionsTable">${showLoading()}</tbody>
+              </table>
+            </div>
           </div>
         </div>
       `;
+
+      try {
+        const [decisionsSummary, tokensSummary] = await Promise.all([
+          apiFetch('/admin/ai/decisions/summary'),
+          apiFetch('/admin/ai/tokens/summary')
+        ]);
+
+        document.getElementById('decisionsStats').innerHTML = `
+          <div class="stat-card purple">
+            <div class="stat-header">
+              <div class="stat-icon purple"><i class="fas fa-brain"></i></div>
+            </div>
+            <div class="stat-value">${decisionsSummary.total_decisions}</div>
+            <div class="stat-label">Total Decisions</div>
+            <div class="stat-change"><i class="fas fa-users"></i> ${decisionsSummary.total_users_with_decisions} users</div>
+          </div>
+
+          <div class="stat-card blue">
+            <div class="stat-header">
+              <div class="stat-icon blue"><i class="fas fa-zap"></i></div>
+            </div>
+            <div class="stat-value">${tokensSummary.total_tokens_used.toLocaleString()}</div>
+            <div class="stat-label">Total Tokens Used</div>
+            <div class="stat-change"><i class="fas fa-chart-line"></i> All time</div>
+          </div>
+
+          <div class="stat-card green">
+            <div class="stat-header">
+              <div class="stat-icon green"><i class="fas fa-robot"></i></div>
+            </div>
+            <div class="stat-value">${tokensSummary.total_tokens_from_decisions.toLocaleString()}</div>
+            <div class="stat-label">Tokens from Decisions</div>
+            <div class="stat-change"><i class="fas fa-circle"></i> Decision-based</div>
+          </div>
+
+          <div class="stat-card orange">
+            <div class="stat-header">
+              <div class="stat-icon orange"><i class="fas fa-person"></i></div>
+            </div>
+            <div class="stat-value">${tokensSummary.total_tokens_from_users.toLocaleString()}</div>
+            <div class="stat-label">Tokens from Users</div>
+            <div class="stat-change"><i class="fas fa-circle"></i> User-based</div>
+          </div>
+        `;
+      } catch (error) {
+        document.getElementById('decisionsStats').innerHTML = '<div class="stat-card">Failed to load AI statistics</div>';
+      }
     }
 
     // NOTIFICATIONS
@@ -2141,8 +2268,8 @@ function exportUsersCSV() {
     function showWithdrawForm() {
       const bodyHTML = `
         <div class="form-group">
-          <label>Amount</label>
-          <input type="number" id="withdrawAmount" class="form-control" placeholder="Amount">
+          <label>Amount (in USD dollars)</label>
+          <input type="number" id="withdrawAmount" class="form-control" placeholder="e.g. 50.00" step="0.01" min="0">
         </div>
         <div class="form-group">
           <label>Currency</label>
@@ -2173,9 +2300,16 @@ function exportUsersCSV() {
       }
 
       try {
+        // Convert to minor units (multiply by 100 for USD)
+        const amountInMinorUnits = Math.round(parseFloat(amount) * 100);
+        
         await apiFetch('/admin/withdrawals', {
           method: 'POST',
-          body: JSON.stringify({ amount: parseInt(amount), currency, destination })
+          body: JSON.stringify({ 
+            amount: amountInMinorUnits, 
+            currency: currency.toLowerCase(), 
+            destination 
+          })
         });
         showToast('Withdrawal request submitted', 'success');
         closeModal();
